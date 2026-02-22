@@ -1,0 +1,30 @@
+[project]
+name = 'analyze_provider'
+version = '0.1.0'
+requires-python = '>=3.11'
+dependencies = [
+    'polars>=1.0',
+    'matplotlib',
+    'numpy',
+    'statsmodels',
+    'typer[all]',
+    'eco-stats @ git+https://github.com/lowmason/eco-stats.git',
+]
+
+[project.optional-dependencies]
+interactive = ['plotly']
+dev = ['pytest', 'ruff']
+docs = ['mkdocs>=1.5', 'mkdocs-material>=9.5', 'mkdocstrings[python]>=0.24']
+
+[project.scripts]
+analyze-provider = 'analyze_provider.cli:app'
+
+[build-system]
+requires = ['hatchling']
+build-backend = 'hatchling.build'
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ['src/analyze_provider']

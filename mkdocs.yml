@@ -1,0 +1,92 @@
+# MkDocs configuration for analyze_provider
+# Uses Material for MkDocs and mkdocstrings for API docs
+
+site_name: analyze_provider
+site_description: Payroll provider representativeness analysis
+site_url: https://github.com/lowmason/analyze_provider
+repo_url: https://github.com/lowmason/analyze_provider
+repo_name: analyze_provider
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      lang: en
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            heading_level: 2
+            members_order: source
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            separate_signature: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Quick start: guide/quickstart.md
+    - Data sources: guide/data-sources.md
+    - Pipeline overview: guide/pipeline.md
+  - CLI Reference: cli.md
+  - Onboarding & specification: onboard.md
+  - API Reference:
+    - analyze_provider: api/analyze_provider.md
+    - cli: api/cli.md
+    - config: api/config.md
+    - naics: api/naics.md
+    - size_class: api/size_class.md
+    - panel: api/panel.md
+    - data:
+      - payroll: api/data_payroll.md
+      - qcew: api/data_qcew.md
+      - ces: api/data_ces.md
+      - bed: api/data_bed.md
+    - analysis:
+      - coverage: api/analysis_coverage.md
+      - growth: api/analysis_growth.md
+      - births: api/analysis_births.md
+      - reweight: api/analysis_reweight.md
+    - output:
+      - exhibits: api/output_exhibits.md
+      - report: api/output_report.md
