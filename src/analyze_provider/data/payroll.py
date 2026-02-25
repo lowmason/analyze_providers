@@ -18,12 +18,21 @@ REQUIRED_COLUMNS: list[str] = [
     'qualified_employment',
 ]
 
+OPTIONAL_COLUMNS: list[str] = [
+    'employee_id',
+    'gross_pay',
+    'filing_date',
+    'hires',
+    'separations',
+]
+
 
 def load_payroll(path: str | Path) -> pl.LazyFrame:
     """Load payroll provider data from parquet, validate, and add derived columns.
 
-    Validates required columns exist and are in expected order. Casts types and adds
-    naics2, naics3, supersector, size_class, quarter.
+    Validates required columns exist. Casts types and adds
+    naics2, naics3, supersector, size_class, quarter. Preserves optional columns
+    (employee_id, gross_pay, filing_date, hires, separations) if present.
 
     Args:
         path: Path to a single parquet file or directory of parquet files.
@@ -32,7 +41,7 @@ def load_payroll(path: str | Path) -> pl.LazyFrame:
         LazyFrame with required and derived columns.
 
     Raises:
-        ValueError: If required columns are missing or misordered.
+        ValueError: If required columns are missing.
     """
     p = Path(path)
     if p.is_dir():
@@ -45,9 +54,11 @@ def load_payroll(path: str | Path) -> pl.LazyFrame:
     if missing:
         raise ValueError(f'Payroll data missing required columns: {missing}; got {schema_cols}')
 
-    lf = lf.select(REQUIRED_COLUMNS + [c for c in schema_cols if c not in REQUIRED_COLUMNS])
+    # Keep required columns first, then optional, then any extras
+    extra_cols = [c for c in schema_cols if c not in REQUIRED_COLUMNS]
+    lf = lf.select(REQUIRED_COLUMNS + extra_cols)
 
-    return (
+    lf = (
         lf
         .with_columns(
             pl.col('ref_date').cast(pl.Date),
@@ -74,3 +85,49 @@ def load_payroll(path: str | Path) -> pl.LazyFrame:
             (pl.col('ref_date').dt.year().cast(pl.Utf8) + pl.lit('Q') + pl.col('ref_date').dt.quarter().cast(pl.Utf8)).alias('quarter'),
         )
     )
+
+    # Cast optional columns if present
+    if 'gross_pay' in schema_cols:
+        lf = lf.with_columns(pl.col('gross_pay').cast(pl.Float64))
+    if 'filing_date' in schema_cols:
+        lf = lf.with_columns(pl.col('filing_date').cast(pl.Date))
+
+    return lf
+
+
+def load_payroll_employees(path: str | Path) -> pl.LazyFrame:
+    """Load employee-level payroll data from parquet.
+
+    Expects columns: employee_id, client_id, ref_date, plus optional hire_date, separation_date, gross_pay.
+    This is an alternative to the client-month loader for worker-level flow analysis.
+
+    Args:
+        path: Path to employee-level parquet file(s).
+
+    Returns:
+        LazyFrame with employee-level data.
+
+    Raises:
+        ValueError: If required employee columns are missing.
+    """
+    p = Path(path)
+    if p.is_dir():
+        lf = pl.scan_parquet(p / '*.parquet')
+    else:
+        lf = pl.scan_parquet(p)
+
+    schema_cols = lf.collect_schema().names()
+    required = ['employee_id', 'client_id', 'ref_date']
+    missing = [c for c in required if c not in schema_cols]
+    if missing:
+        raise ValueError(f'Employee data missing required columns: {missing}; got {schema_cols}')
+
+    lf = lf.with_columns(pl.col('ref_date').cast(pl.Date))
+    if 'hire_date' in schema_cols:
+        lf = lf.with_columns(pl.col('hire_date').cast(pl.Date))
+    if 'separation_date' in schema_cols:
+        lf = lf.with_columns(pl.col('separation_date').cast(pl.Date))
+    if 'gross_pay' in schema_cols:
+        lf = lf.with_columns(pl.col('gross_pay').cast(pl.Float64))
+
+    return lf

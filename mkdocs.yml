@@ -83,8 +83,12 @@ nav:
       - ces: api/data_ces.md
       - bed: api/data_bed.md
     - analysis:
+      - data_quality: api/analysis_data_quality.md
       - coverage: api/analysis_coverage.md
       - growth: api/analysis_growth.md
+      - flows: api/analysis_flows.md
+      - tenure: api/analysis_tenure.md
+      - earnings: api/analysis_earnings.md
       - births: api/analysis_births.md
       - reweight: api/analysis_reweight.md
     - output:

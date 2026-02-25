@@ -49,8 +49,12 @@ def build_dashboard(exhibits_dir: Path | None = None, output_path: Path | None =
         'coverage_heatmap_employment', 'coverage_heatmap_establishments',
         'industry_composition_comparison', 'size_class_distribution',
         'coverage_over_time', 'growth_tracking', 'growth_decomposition_waterfall',
+        'employment_change_decomposition',
         'birth_rate_comparison', 'birth_rate_cross_correlation',
         'birth_lead_regression_table', 'usability_map', 'reweighting_impact',
+        'gross_job_flows', 'client_churn', 'vintage_composition',
+        'csi_chart', 'earnings_distribution', 'data_quality_summary',
+        'survival_curves', 'tenure_histogram',
     ]:
         png = exhibits / f'{name}.png'
         if png.exists():

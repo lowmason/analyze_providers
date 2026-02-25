@@ -47,7 +47,7 @@ def compute_share_comparison(
     qcew_emp = qcew_emp.with_columns((pl.col('qcew_employment') / pl.col('qcew_total')).alias('qcew_share'))
     join_cols = ['ref_date', 'quarter', dimension]
     merged = payroll_agg.select(join_cols + ['payroll_share']).join(
-        qcew_emp.select(join_cols + ['qcew_share']), on=join_cols, how='outer'
+        qcew_emp.select(join_cols + ['qcew_share']), on=join_cols, how='full', coalesce=True,
     )
     return merged.with_columns(
         (pl.col('payroll_share').fill_null(0) - pl.col('qcew_share').fill_null(0)).abs().alias('abs_dev'),
@@ -63,6 +63,41 @@ def compute_coverage_over_time(
 ) -> pl.LazyFrame:
     """Coverage ratios with quarter as a column for time series plots."""
     return compute_coverage(payroll_agg, qcew, grouping_cols)
+
+
+def compute_composition_shift_index(
+    payroll_agg: pl.LazyFrame,
+    dimension: str,
+) -> pl.LazyFrame:
+    """Compute Composition Shift Index (CSI) over time for a given dimension.
+
+    CSI_t = sum(|s_{i,t} - s_{i,t-1}|), bounded [0, 2].
+    Tracks how much the distribution across cells of the given dimension shifts month to month.
+
+    Args:
+        payroll_agg: LazyFrame with ref_date, dimension column, and payroll_employment.
+        dimension: Column name (e.g. 'supersector', 'state_fips', 'size_class').
+
+    Returns:
+        LazyFrame with ref_date and csi columns.
+    """
+    # Compute shares by dimension per ref_date
+    totals = payroll_agg.group_by('ref_date').agg(pl.col('payroll_employment').sum().alias('total_emp'))
+    with_share = payroll_agg.join(totals, on='ref_date').with_columns(
+        (pl.col('payroll_employment') / pl.col('total_emp')).alias('share'),
+    )
+    # Get lag share
+    with_share = with_share.sort(['ref_date', dimension])
+    with_share = with_share.with_columns(
+        pl.col('share').shift(1).over(dimension).alias('prev_share'),
+    )
+    # CSI = sum of |share - prev_share| per ref_date
+    csi = with_share.with_columns(
+        (pl.col('share') - pl.col('prev_share')).abs().alias('abs_shift'),
+    ).group_by('ref_date').agg(
+        pl.col('abs_shift').sum().alias('csi'),
+    ).sort('ref_date')
+    return csi
 
 
 def compute_cell_reliability(
