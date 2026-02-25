@@ -87,8 +87,12 @@ analyze_provider/
 │       ├── panel.py               # Build the client-month panel with derived fields
 │       ├── analysis/
 │       │   ├── __init__.py
+│       │   ├── data_quality.py    # Data quality assessment and scorecard
 │       │   ├── coverage.py        # Coverage ratios and distributional comparisons
 │       │   ├── growth.py          # Growth rate comparisons and decompositions
+│       │   ├── flows.py           # Worker-level flows (accessions, separations, transitions)
+│       │   ├── tenure.py          # Client tenure, churn rates, and vintage analysis
+│       │   ├── earnings.py        # Earnings analysis and QCEW wage comparisons
 │       │   ├── births.py          # Birth rate analysis and BED comparisons
 │       │   └── reweight.py        # Raking / reweighting to match QCEW margins
 │       ├── output/
@@ -101,7 +105,11 @@ analyze_provider/
     ├── test_panel.py
     ├── test_coverage.py
     ├── test_growth.py
-    └── test_births.py
+    ├── test_births.py
+    ├── test_data_quality.py
+    ├── test_flows.py
+    ├── test_tenure.py
+    └── test_earnings.py
 ```
 
 The `pyproject.toml` should define:
@@ -358,6 +366,100 @@ The panel module should produce aggregated summary frames at multiple levels of 
 Each aggregation level should be stored as a separate lazy frame (or a single frame with a `grouping_level` column) for easy joining to official data.
 
 
+### `analysis/data_quality.py`
+
+Data quality assessment and scorecard. Runs as the **first** analysis step, before any other analytical module.
+
+**Quality assessment:**
+- `assess_quality(payroll: pl.LazyFrame) -> pl.DataFrame`
+- Computes column completeness rates (fraction of non-null values for every column)
+- Counts zero-employment months per client
+- Validates NAICS codes against the known 6-digit code list
+- When `filing_date` is present, computes filing-lag distribution (days between `ref_date` and `filing_date`) and data-freshness scores
+- Flags columns and time ranges that may affect downstream results
+
+**Scorecard output:**
+- Produces a data-quality scorecard summarising completeness, validity, and timeliness metrics
+- Writes results to `analysis/data_quality.parquet`
+- The scorecard is included in the report's technical appendix when available
+
+**Design notes:**
+- Accepts a `pl.LazyFrame` from the loader; calls `.collect()` only for the final scorecard output
+- Does not depend on official data — runs on payroll data alone
+- Emits warnings (via `logging`) for any metric below configurable thresholds
+
+
+### `analysis/tenure.py`
+
+Client tenure, churn rates, and vintage analysis.
+
+**Tenure computation:**
+- `compute_tenure(payroll: pl.LazyFrame) -> pl.LazyFrame`
+- For each client, computes tenure in months as the span from `entry_month` to `exit_month` (or the latest `ref_date` if still active)
+- Produces tenure-distribution summaries by supersector and size class
+
+**Churn rates:**
+- `compute_churn_rates(payroll: pl.LazyFrame, grouping_cols: list[str]) -> pl.LazyFrame`
+- Computes quarterly churn (exit) rates: number of clients whose `exit_month` falls in the quarter divided by the beginning-of-quarter client count
+- Returns churn rates by quarter and grouping level
+
+**Vintage composition:**
+- `compute_vintage_composition(payroll: pl.LazyFrame, grouping_cols: list[str]) -> pl.LazyFrame`
+- Groups clients by entry cohort (vintage, defined by `entry_month` quarter)
+- Tracks each vintage's share of total employment over time
+- Useful for understanding whether representativeness depends on a few long-tenured anchor clients or a broad, regularly refreshed base
+
+**Output:**
+- Results written to `analysis/tenure.parquet`
+- Tenure distributions and vintage composition charts are added to the exhibits when this module runs
+
+
+### `analysis/flows.py`
+
+Worker-level flows: accessions, separations, and job-to-job transitions.
+
+**Flow computation:**
+- `compute_flows(payroll: pl.LazyFrame, grouping_cols: list[str]) -> pl.LazyFrame`
+- When `employee_id` is present, computes monthly and quarterly accession and separation rates by tracking individual worker appearances across consecutive months
+- When `employee_id` is absent but `hires` and `separations` columns are present, uses these pre-aggregated counts as a fallback
+- Skipped entirely if no flow-relevant columns are present (a log message is emitted)
+
+**BED benchmarking:**
+- `compare_flows_to_bed(flows: pl.LazyFrame, bed: pl.LazyFrame, grouping_cols: list[str]) -> pl.LazyFrame`
+- Benchmarks computed accession and separation rates against BED gross-flows data
+- Compares levels and trends; computes correlation over time
+
+**Job-to-job transitions (optional):**
+- When `employee_id` is available, the module can additionally compute job-to-job transition rates (workers moving between clients within the same month or consecutive months)
+- Produces worker-level tenure distributions (time at current client)
+
+**Output:**
+- Results written to `analysis/flows.parquet`
+- Worker-flow rate charts and BED comparison exhibits are added when this module runs
+
+
+### `analysis/earnings.py`
+
+Earnings analysis and QCEW wage comparisons. Requires the optional `gross_pay` column.
+
+**Earnings computation:**
+- `compute_earnings(payroll: pl.LazyFrame, grouping_cols: list[str]) -> pl.LazyFrame`
+- Computes average pay per employee (`gross_pay / qualified_employment`) by month and grouping level
+- Computes pay-growth rates (month-over-month and year-over-year)
+- Produces pay distributions by supersector and size class
+
+**QCEW wage benchmarking:**
+- `compare_earnings_to_qcew(earnings: pl.LazyFrame, qcew: pl.LazyFrame, grouping_cols: list[str]) -> pl.LazyFrame`
+- Benchmarks average pay against QCEW average weekly wages
+- Compares pay levels and pay-growth trajectories
+- Computes correlation of pay-growth rates over time
+
+**Output:**
+- Results written to `analysis/earnings.parquet`
+- Pay-level comparison and pay-growth tracking exhibits are added when `gross_pay` is present
+- Skipped if `gross_pay` is absent (a log message is emitted; no error raised)
+
+
 ### `analysis/coverage.py`
 
 Static representativeness analysis against QCEW.
@@ -600,12 +702,17 @@ The package should support a single `run` command that executes the full pipelin
 
 1. Load and validate payroll data (`data/payroll.py`)
 2. Fetch/load official data via eco-stats (`data/qcew.py`, `data/ces.py`, `data/bed.py`)
-3. Build aggregated panel (`panel.py`)
-4. Run coverage analysis (`analysis/coverage.py`)
-5. Run growth analysis (`analysis/growth.py`)
-6. Run reweighting (`analysis/reweight.py`), then re-run growth analysis with weights
-7. Run birth analysis (`analysis/births.py`)
-8. Generate exhibits (`output/exhibits.py`)
-9. Assemble report (`output/report.py`)
+3. Data quality assessment (`analysis/data_quality.py`)
+4. Client tenure and churn (`analysis/tenure.py`)
+5. Vintage assessment (`analysis/tenure.py`)
+6. Build aggregated panel (`panel.py`)
+7. Run coverage analysis (`analysis/coverage.py`)
+8. Run growth analysis, including employment-change decomposition (`analysis/growth.py`)
+9. Worker-level flows (`analysis/flows.py`)
+10. Earnings analysis (`analysis/earnings.py`)
+11. Run reweighting (`analysis/reweight.py`), then re-run growth analysis with weights
+12. Run birth analysis (`analysis/births.py`)
+13. Generate exhibits (`output/exhibits.py`)
+14. Assemble report (`output/report.py`)
 
 Each step should log progress and be independently re-runnable using cached intermediate outputs.

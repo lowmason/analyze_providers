@@ -19,7 +19,7 @@ SUPERSECTOR_MAP: dict[str, str] = {
     '49': 'Transportation and warehousing',
     '51': 'Information',
     '52': 'Financial activities',
-    '53': 'Professional and business services',
+    '53': 'Financial activities',
     '54': 'Professional and business services',
     '55': 'Professional and business services',
     '56': 'Professional and business services',

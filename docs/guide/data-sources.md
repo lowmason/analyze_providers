@@ -17,6 +17,26 @@ A client–month panel with the following fields, in this order:
 
 Input is one or more **parquet** files. The loader accepts a single file path or a directory (scans `*.parquet`). The package validates that these columns exist and adds derived columns: `naics2`, `naics3`, `supersector`, `size_class`, `quarter`.
 
+### Optional columns
+
+The following columns are not required but, when present, unlock additional analysis modules:
+
+| Field | Description | Unlocks |
+|-------|-------------|---------|
+| `gross_pay` | Total gross pay for the client in the reference month | **Earnings analysis** — average pay, pay-growth tracking, pay-distribution comparisons |
+| `filing_date` | Date the client first filed payroll with the provider | **Data quality assessment** — filing-lag metrics, data-freshness scoring |
+| `employee_id` | Anonymised worker identifier (unique within client) | **Worker-level flows** — hires, separations, accessions/separations rates, job-to-job transitions |
+| `hires` | Count of new hires during the reference month | **Worker-level flows** — when `employee_id` is unavailable, pre-aggregated hire counts are used as a fallback |
+| `separations` | Count of separations during the reference month | **Worker-level flows** — when `employee_id` is unavailable, pre-aggregated separation counts are used as a fallback |
+
+The loader (`data/payroll.py`) detects these columns automatically. If a column is absent the corresponding analysis module is skipped and a log message is emitted. No error is raised for missing optional columns.
+
+**Earnings analysis** (`analysis/earnings.py`) uses `gross_pay` together with `qualified_employment` to compute average pay per employee and to track pay-growth rates against official (QCEW) average weekly wages. When `gross_pay` is present, the pipeline adds earnings exhibits (pay-level comparison, pay-growth tracking) to the report.
+
+**Data quality assessment** (`analysis/data_quality.py`) uses `filing_date` to measure reporting lags and data freshness. It also performs completeness checks on all columns (missing-value rates, zero-employment months, NAICS coverage) and produces a data-quality scorecard that runs as the first analysis step in the pipeline.
+
+**Worker-level flows** (`analysis/flows.py`) uses either `employee_id` (preferred) or the `hires`/`separations` aggregates to compute accession and separation rates. These rates are compared to BED gross-flows data and JOLTS where available. When `employee_id` is present the module can additionally compute job-to-job transition rates and worker-level tenure distributions.
+
 ---
 
 ## Official statistics (eco-stats)

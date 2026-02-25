@@ -12,13 +12,13 @@ from analyze_provider.naics import (
 
 def test_naics6_to_naics2() -> None:
     assert naics6_to_naics2('236220') == '23'
-    assert naics6_to_naics2('31') == '31'
+    assert naics6_to_naics2('310000') == '31'
     assert naics6_to_naics2('445110') == '44'
 
 
 def test_naics6_to_naics3() -> None:
     assert naics6_to_naics3('236220') == '236'
-    assert naics6_to_naics3('31') == '031'
+    assert naics6_to_naics3('310000') == '310'
     assert naics6_to_naics3('445110') == '445'
 
 

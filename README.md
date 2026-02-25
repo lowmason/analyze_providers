@@ -8,11 +8,15 @@ Evaluate how representative a private payroll provider's microdata is relative t
 
 ## Features
 
+- **Data quality assessment** — Column completeness, zero-employment detection, NAICS validity, filing-lag distribution, and a data-quality scorecard. Runs first to flag issues before downstream analyses.
+- **Client tenure and churn** — Tenure distributions, quarterly churn (exit) rates by supersector and size class, and vintage composition tracking over time.
 - **Coverage analysis** — Ratios of payroll employment and client count to QCEW employment and establishments; by national, supersector, state, size class, and cross-tabs. Cell reliability (usability map: reliable / marginal / insufficient).
-- **Growth analysis** — Month-over-month and year-over-year growth; comparison to CES; shift-share decomposition; turning point lead/lag.
+- **Growth analysis** — Month-over-month and year-over-year growth; comparison to CES; shift-share decomposition; employment-change decomposition (continuing, entering, exiting clients); turning point lead/lag.
+- **Worker-level flows** — Accession and separation rates from worker-level data or pre-aggregated hire/separation counts; benchmarking against BED gross flows; optional job-to-job transition rates.
+- **Earnings analysis** — Average pay per employee, pay-growth tracking, pay distributions by supersector and size class; benchmarking against QCEW average weekly wages. Requires optional `gross_pay` column.
 - **Birth analysis** — Payroll birth rates (births / birth-determinable) vs BED; cross-correlation and Granger-style regressions.
 - **Reweighting** — Raking to QCEW margins (e.g. supersector) and reweighted growth comparison.
-- **Output** — Matplotlib exhibits (heatmaps, growth tracking, usability map, etc.), executive summary, dashboard, and technical appendix (CSV + methodology).
+- **Output** — Matplotlib exhibits (heatmaps, growth tracking, usability map, tenure distributions, vintage composition, worker-flow rates, earnings comparisons, etc.), executive summary, dashboard, and technical appendix (CSV + methodology).
 
 All official data is fetched via [eco-stats](https://github.com/lowmason/eco-stats) (`BLSClient`). Data handling uses **polars**; the CLI is built with **Typer**.
 
@@ -47,7 +51,7 @@ The entry point is **analyze-provider** with three commands:
 
 | Command | Description |
 |---------|-------------|
-| **run** | Full pipeline: load payroll → fetch/load official data → panel → coverage, growth, births, reweight → exhibits → report |
+| **run** | Full pipeline: load payroll → fetch/load official data → data quality → tenure/churn → vintage → panel → coverage, growth, flows, earnings, reweight, births → exhibits → report |
 | **fetch-official** | Fetch and cache QCEW, CES, and BED (no payroll required) |
 | **exhibits** | Regenerate all exhibits from existing analysis outputs |
 
@@ -86,8 +90,8 @@ See [Data sources](docs/guide/data-sources.md) for field definitions and tempora
 | Path | Contents |
 |------|----------|
 | `output/cache/` | Cached QCEW, CES, BED parquet files |
-| `output/analysis/` | Panel, coverage, growth, birth_rates parquet files |
-| `output/exhibits/` | PNG/PDF figures (coverage heatmaps, growth tracking, usability map, etc.) |
+| `output/analysis/` | Panel, data_quality, tenure, coverage, growth, flows, earnings, birth_rates parquet files |
+| `output/exhibits/` | PNG/PDF figures (coverage heatmaps, growth tracking, usability map, tenure distributions, worker-flow rates, earnings comparisons, etc.) |
 | `output/executive_summary.md` | One-page summary |
 | `output/dashboard.md` | Dashboard that references all exhibits |
 | `output/appendix/` | Cell-level CSVs and methodology |
@@ -110,8 +114,12 @@ src/analyze_provider/
 │   ├── ces.py         # Fetch/load CES
 │   └── bed.py         # Fetch/load BED
 ├── analysis/
+│   ├── data_quality.py # Data quality assessment and scorecard
 │   ├── coverage.py    # Coverage ratios, share comparison, cell reliability
 │   ├── growth.py      # Growth rates, comparison, decomposition
+│   ├── flows.py       # Worker-level flows (accessions, separations, transitions)
+│   ├── tenure.py      # Client tenure, churn rates, and vintage analysis
+│   ├── earnings.py    # Earnings analysis and QCEW wage comparisons
 │   ├── births.py      # Birth rates, BED comparison, lead tests
 │   └── reweight.py    # Rake to QCEW margins
 └── output/
